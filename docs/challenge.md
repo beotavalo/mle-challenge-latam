@@ -5,7 +5,7 @@ Operationalization of the Data Scientist's flight delay model for SCL airport: a
 experiment tracking with a model registry.
 
 - **Repository**: <https://github.com/beotavalo/mle-challenge-latam>
-- **API**: see `STRESS_URL` in the `Makefile` (line 26)
+- **API**: <https://flight-delay-api-n7kpplta7a-uc.a.run.app> (also set as `STRESS_URL` in the `Makefile`, line 26)
 - **Model in production**: `flight_delay_logreg` version 1, alias `@champion`
 
 ---
@@ -174,8 +174,8 @@ the code that produced it.
 
 ### Load test
 
-Local baseline, single uvicorn process, 100 users for 60 s (`make stress-test` against
-`http://127.0.0.1:8000`):
+Local baseline, single uvicorn process, 100 users for 60 s
+(`make stress-test STRESS_URL=http://127.0.0.1:8000`; the default target is now the deployed URL):
 
 | Requests | Failures | p50 | p95 | p99 | Throughput |
 |---|---|---|---|---|---|
