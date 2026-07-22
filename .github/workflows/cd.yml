@@ -1,0 +1,141 @@
+name: 'Continuous Delivery'
+
+# Releases to Cloud Run on every merge to main. Authentication uses Workload
+# Identity Federation, so no long-lived service account key exists anywhere.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_stress_test:
+        description: 'Run the load test against the released revision'
+        type: boolean
+        default: true
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required to mint the short-lived GCP credential
+
+env:
+  PYTHON_VERSION: '3.10'
+  SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'flight-delay-api' }}
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'flight-delay' }}
+
+jobs:
+  deploy:
+    name: Build, publish and release
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.release.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker against Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Immutable tag first: every revision is traceable back to its commit.
+      - name: Build and publish the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Release the revision on Cloud Run
+        id: release
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
+          flags: >-
+            --allow-unauthenticated
+            --port=8080
+            --cpu=1
+            --memory=512Mi
+            --concurrency=80
+            --min-instances=0
+            --max-instances=10
+            --timeout=30s
+          labels: |
+            commit=${{ github.sha }}
+            managed-by=github-actions
+
+      - name: Smoke test the released revision
+        run: |
+          set -euo pipefail
+          url="${{ steps.release.outputs.url }}"
+          echo "Released at $url"
+          curl -sf --retry 10 --retry-delay 3 --retry-connrefused "$url/health" | grep -q '"OK"'
+          curl -sf -X POST "$url/predict" \
+            -H 'Content-Type: application/json' \
+            -d '{"flights":[{"OPERA":"Aerolineas Argentinas","TIPOVUELO":"N","MES":3}]}' \
+            | grep -q '"predict"'
+          # An unknown airline must still be refused in production.
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$url/predict" \
+            -H 'Content-Type: application/json' \
+            -d '{"flights":[{"OPERA":"Argentinas","TIPOVUELO":"O","MES":13}]}')
+          test "$status" = "400"
+
+      - name: Summarize the release
+        run: |
+          {
+            echo "### Released"
+            echo ""
+            echo "- Service: \`${{ env.SERVICE }}\` in \`${{ env.REGION }}\`"
+            echo "- Revision image tag: \`${{ github.sha }}\`"
+            echo "- URL: ${{ steps.release.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  stress-test:
+    name: Load test the released revision
+    needs: deploy
+    if: github.event_name == 'push' || inputs.run_stress_test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'requirements*.txt'
+
+      - name: Install dependencies
+        run: |
+          uv venv --python ${{ env.PYTHON_VERSION }}
+          uv pip install -r requirements.txt -r requirements-test.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Run the load test against the deployed URL
+        run: make stress-test STRESS_URL=${{ needs.deploy.outputs.url }}
+
+      - name: Publish the load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-report
+          path: reports/stress-test.html
+          retention-days: 14
