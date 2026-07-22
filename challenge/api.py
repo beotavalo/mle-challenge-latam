@@ -25,6 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 API_TITLE = "SCL Flight Delay Prediction API"
 API_VERSION = "1.0.0"
+PREDICT_ENDPOINT = "/predict"
 API_DESCRIPTION = (
     "Predicts whether a flight taking off from or landing at SCL airport will be "
     "delayed more than 15 minutes."
@@ -124,15 +125,19 @@ def load_champion_model() -> None:
 
 
 @app.exception_handler(RequestValidationError)
-async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def handle_validation_error(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
     """Answer malformed or unknown-category payloads with 400 instead of 422.
 
     The response echoes the field locations that failed, never the submitted values,
-    so logs and error bodies stay free of request content.
+    and the log record carries a constant endpoint label instead of the reconstructed
+    request URL, which starlette does not validate (PYSEC-2026-161 / PYSEC-2026-248).
     """
     LOGGER.warning(
         "rejected prediction request",
-        extra={"path": request.url.path, "violations": len(exc.errors())},
+        extra={"endpoint": PREDICT_ENDPOINT, "violations": len(exc.errors())},
     )
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -141,9 +146,12 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
 
 
 @app.exception_handler(ValueError)
-async def handle_value_error(request: Request, exc: ValueError) -> JSONResponse:
+async def handle_value_error(
+    request: Request,
+    exc: ValueError,
+) -> JSONResponse:
     """Translate domain-level rejections raised during preprocessing into 400."""
-    LOGGER.warning("rejected prediction request", extra={"path": request.url.path})
+    LOGGER.warning("rejected prediction request", extra={"endpoint": PREDICT_ENDPOINT})
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
 
 
@@ -152,7 +160,7 @@ async def get_health() -> dict[str, str]:
     return {"status": "OK"}
 
 
-@app.post("/predict", status_code=200, response_model=PredictResponse)
+@app.post(PREDICT_ENDPOINT, status_code=200, response_model=PredictResponse)
 async def post_predict(request: PredictRequest) -> PredictResponse:
     """Score a batch of flights.
 

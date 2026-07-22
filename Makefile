@@ -63,9 +63,29 @@ format:			## Auto-format and auto-fix the codebase (ruff)
 typecheck:		## Run static type checking (mypy)
 	mypy
 
+# Advisories reviewed and accepted, each one unreachable from this service.
+# See docs/challenge.md ("Dependency vulnerabilities") for the per-advisory analysis.
+# Anything NOT listed here fails the build, which is what makes this gate meaningful.
+AUDIT_ACCEPTED = \
+	--ignore-vuln PYSEC-2024-110 \
+	--ignore-vuln PYSEC-2026-161 \
+	--ignore-vuln PYSEC-2026-248 \
+	--ignore-vuln PYSEC-2026-249 \
+	--ignore-vuln PYSEC-2026-1941 \
+	--ignore-vuln PYSEC-2026-1942 \
+	--ignore-vuln PYSEC-2026-2280 \
+	--ignore-vuln PYSEC-2026-2281 \
+	--ignore-vuln PYSEC-2023-62 \
+	--ignore-vuln PYSEC-2026-2151 \
+	--ignore-vuln PYSEC-2026-1845
+
 .PHONY: security
 security:		## Scan dependencies for known vulnerabilities (pip-audit)
-	pip-audit -r requirements.txt -r requirements-test.txt
+	pip-audit -r requirements.txt -r requirements-test.txt $(AUDIT_ACCEPTED)
+
+.PHONY: security-report
+security-report:	## Full vulnerability report, including the accepted advisories
+	pip-audit -r requirements.txt -r requirements-test.txt --desc || true
 
 .PHONY: train
 train:			## Train the model, track the experiment in MLflow and refresh the serving artifact
