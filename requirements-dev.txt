@@ -1,2 +1,10 @@
 matplotlib~=3.7.2
 seaborn~=0.12.2
+
+# Experiment tracking & model registry (training time only, kept out of the serving image)
+mlflow~=2.9.2
+
+# Code quality and security gates (also run in CI)
+ruff~=0.15.0
+mypy~=2.3.0
+pip-audit~=2.10.0
