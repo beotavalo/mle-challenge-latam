@@ -92,6 +92,7 @@ GitHub repository *variables* (Settings > Secrets and variables > Actions > Vari
   GCP_REGION               ${REGION}
   GCP_ARTIFACT_REPOSITORY  ${REPOSITORY}
   CLOUD_RUN_SERVICE        ${SERVICE}
+  GCP_RUNTIME_SERVICE_ACCOUNT ${RUNTIME_EMAIL}
 
 GitHub repository *secrets*:
   GCP_WIF_PROVIDER         ${POOL_ID}/providers/${PROVIDER}
