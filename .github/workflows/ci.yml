@@ -48,6 +48,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pip-audit resolves the declared requirement ranges inside a throwaway
+      # virtualenv, so it needs an interpreter with a working `ensurepip`. uv's
+      # standalone Linux build ships without the bundled pip wheel, so the audit
+      # environment is based on a stock CPython instead.
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -56,7 +66,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv --python ${{ env.PYTHON_VERSION }}
+          uv venv --python '${{ steps.python.outputs.python-path }}'
           uv pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
