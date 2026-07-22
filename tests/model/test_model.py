@@ -1,9 +1,15 @@
 import unittest
 import pandas as pd
 
+from pathlib import Path
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from challenge.model import DelayModel
+
+# Anchored to this file instead of the working directory: `make model-test` runs
+# pytest from the repository root, where the original "../data/data.csv" resolved
+# outside the repository and made every test error out on setUp.
+DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "data.csv"
 
 class TestModel(unittest.TestCase):
 
@@ -28,7 +34,7 @@ class TestModel(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.model = DelayModel()
-        self.data = pd.read_csv(filepath_or_buffer="../data/data.csv")
+        self.data = pd.read_csv(filepath_or_buffer=DATA_PATH)
         
 
     def test_model_preprocess_for_training(
