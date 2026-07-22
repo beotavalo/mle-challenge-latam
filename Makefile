@@ -43,3 +43,38 @@ api-test:			## Run tests and coverage
 .PHONY: build
 build:			## Build locally the python artifact
 	python setup.py bdist_wheel
+
+# --------------------------------------------------------------------------- #
+# Quality gates and MLOps targets added for this delivery.
+# Appended below on purpose: the STRESS_URL variable must stay on line 26.
+# --------------------------------------------------------------------------- #
+
+.PHONY: lint
+lint:			## Check code style and lint rules (ruff)
+	ruff check .
+	ruff format --check .
+
+.PHONY: format
+format:			## Auto-format and auto-fix the codebase (ruff)
+	ruff format .
+	ruff check --fix .
+
+.PHONY: typecheck
+typecheck:		## Run static type checking (mypy)
+	mypy
+
+.PHONY: security
+security:		## Scan dependencies for known vulnerabilities (pip-audit)
+	pip-audit -r requirements.txt -r requirements-test.txt
+
+.PHONY: train
+train:			## Train the model, track the experiment in MLflow and refresh the serving artifact
+	python -m challenge.train
+
+.PHONY: mlflow-ui
+mlflow-ui:		## Browse the versioned MLflow experiment tracking and model registry snapshot
+	python scripts/mlflow_ui.py
+
+.PHONY: serve
+serve:			## Run the API locally on http://127.0.0.1:8000
+	uvicorn challenge:application --host 0.0.0.0 --port 8000 --reload
