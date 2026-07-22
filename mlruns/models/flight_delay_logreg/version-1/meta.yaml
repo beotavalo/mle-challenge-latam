@@ -1,0 +1,14 @@
+aliases: []
+creation_timestamp: 1784739915635
+current_stage: None
+description: null
+last_updated_timestamp: 1784739915635
+name: flight_delay_logreg
+run_id: 4c3208fa9b2e446889e721ae64dbe7ff
+run_link: null
+source: file:///C:/dev/mle-challenge-latam/mlruns/721399720726736171/4c3208fa9b2e446889e721ae64dbe7ff/artifacts/model
+status: READY
+status_message: null
+storage_location: file:///C:/dev/mle-challenge-latam/mlruns/721399720726736171/4c3208fa9b2e446889e721ae64dbe7ff/artifacts/model
+user_id: null
+version: 1
