@@ -43,6 +43,13 @@ make serve           # run the API locally on :8000
 | 7 | `requirements-test.txt` | `locust~=1.6` pulls `flask 1.1.2`, which does `from jinja2 import escape` — removed in Jinja2 3.1. `make stress-test` died at startup on any environment installed today. | `locust~=2.32`. The provided stress script needs no change. |
 | 8 | `requirements.txt` | `anyio` 4.x ships a pytest plugin that imports `_pytest.scope` (pytest ≥ 7) and crashed collection under the pinned pytest 6.2.5. | Pinned `anyio~=3.7.1`, inside the range starlette accepts. |
 | 9 | Repository | `__MACOSX/` and four `.DS_Store` files were committed from the challenge zip. | Removed and ignored. |
+| 10 | `mlruns/` (self-inflicted, MLE-003) | MLflow's file store writes **absolute** `file://` URIs into its metadata, so the versioned snapshot pointed at the machine that produced it. Training into it from anywhere else made MLflow resolve a foreign path and try to create `/C:` on the Linux runner. | `challenge/train.py` rehomes the store to the current checkout before training; `scripts/mlflow_ui.py` reuses that function instead of keeping its own copy. |
+| 11 | CI toolchain | `pip-audit` resolves the declared requirement ranges inside a throwaway virtualenv, which needs a working `ensurepip`. uv's standalone Linux interpreter ships without the bundled pip wheel, so `make security` died before auditing anything. | The security job bases its environment on a stock CPython; every other job keeps uv's. Auditing the *declared* set rather than the installed one keeps the accept list meaningful and transitive coverage intact. |
+
+Defects 10 and 11 surfaced only when the gates first ran off the machine that wrote
+them, on the first real CI execution. Both are recorded here rather than quietly fixed:
+a quality gate that passes only on its author's laptop is not a gate, and that failure
+mode is worth naming.
 
 ### 2.2 Which model, and why
 
