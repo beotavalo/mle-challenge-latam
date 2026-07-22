@@ -75,8 +75,6 @@ AUDIT_ACCEPTED = \
 	--ignore-vuln PYSEC-2026-1942 \
 	--ignore-vuln PYSEC-2026-2280 \
 	--ignore-vuln PYSEC-2026-2281 \
-	--ignore-vuln PYSEC-2023-62 \
-	--ignore-vuln PYSEC-2026-2151 \
 	--ignore-vuln PYSEC-2026-1845
 
 .PHONY: security
