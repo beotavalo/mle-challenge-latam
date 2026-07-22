@@ -1,0 +1,26 @@
+# Keep the build context small and free of anything that must not ship.
+.git/
+.github/
+.venv/
+.specify/
+specs/
+.claude/
+mlruns/
+data/
+docs/
+reports/
+scripts/
+tests/
+workflows/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+challenge/exploration.ipynb
+challenge/train.py
+requirements-dev.txt
+requirements-test.txt
+Makefile
+README.md
+CONTRIBUTING.md
