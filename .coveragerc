@@ -1,0 +1,14 @@
+[run]
+source = challenge
+branch = True
+omit =
+    challenge/__init__.py
+
+[report]
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    if __name__ == .__main__.:

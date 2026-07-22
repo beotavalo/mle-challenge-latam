@@ -1,0 +1,156 @@
+name: 'Continuous Integration'
+
+# Every quality gate the constitution declares blocking runs here, on every pull
+# request and on every push to the long-lived branches.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # numpy 1.22.4 / pandas 1.3.5 publish no wheels beyond CPython 3.10.
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  quality:
+    name: Lint and static typing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'requirements*.txt'
+
+      - name: Install dependencies
+        run: |
+          uv venv --python ${{ env.PYTHON_VERSION }}
+          uv pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Lint (ruff)
+        run: make lint
+
+      - name: Static typing (mypy)
+        run: make typecheck
+
+  security:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pip-audit resolves the declared requirement ranges inside a throwaway
+      # virtualenv, so it needs an interpreter with a working `ensurepip`. uv's
+      # standalone Linux build ships without the bundled pip wheel, so the audit
+      # environment is based on a stock CPython instead.
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'requirements*.txt'
+
+      - name: Install dependencies
+        run: |
+          uv venv --python '${{ steps.python.outputs.python-path }}'
+          uv pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      # Fails on any advisory outside the reviewed accept list in the Makefile.
+      - name: Audit dependencies (pip-audit)
+        run: make security
+
+      - name: Full advisory report
+        if: always()
+        run: make security-report
+
+  test:
+    name: Model and API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'requirements*.txt'
+
+      - name: Install dependencies
+        run: |
+          uv venv --python ${{ env.PYTHON_VERSION }}
+          uv pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Model tests
+        run: make model-test
+
+      - name: API tests
+        run: make api-test
+
+      - name: Training pipeline still reproduces the champion
+        run: make train
+
+      - name: Publish test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+          retention-days: 14
+
+      - name: Publish the MLflow runs of this build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-runs
+          path: mlruns/
+          retention-days: 14
+
+  container:
+    name: Container image builds and serves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only: publishing and deploying is the delivery pipeline's job.
+      - name: Build the runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: flight-delay-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the image
+        run: |
+          docker run -d --name api -p 8080:8080 flight-delay-api:ci
+          for _ in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8080/health && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/health | grep -q '"OK"'
+          curl -sf -X POST http://127.0.0.1:8080/predict \
+            -H 'Content-Type: application/json' \
+            -d '{"flights":[{"OPERA":"Aerolineas Argentinas","TIPOVUELO":"N","MES":3}]}' \
+            | grep -q '"predict"'
+          docker rm -f api

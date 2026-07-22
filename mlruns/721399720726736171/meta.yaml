@@ -1,0 +1,6 @@
+artifact_location: file:///C:/dev/mle-challenge-latam/mlruns/721399720726736171
+creation_time: 1784739908688
+experiment_id: '721399720726736171'
+last_update_time: 1784739908688
+lifecycle_stage: active
+name: flight_delay_prediction

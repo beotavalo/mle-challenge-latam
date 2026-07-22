@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+reports/
+
+# MLflow local scratch (a curated snapshot of mlruns/ IS versioned on purpose)
+mlruns/.trash/
+mlartifacts/
+
+# Editors / OS noise
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+
+# Agent tooling and generated spec-driven-development scaffolding
+.claude
+.specify/
+specs/
+
+# Secrets and credentials -- never commit
+.env
+.env.*
+*.pem
+*-sa-key.json
+gha-creds-*.json
