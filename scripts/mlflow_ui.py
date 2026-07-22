@@ -13,37 +13,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-TRACKING_DIR = REPOSITORY_ROOT / "mlruns"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-#: Any absolute file URI that ends in the tracking directory, whatever machine and
-#: path separator produced it.
-_FOREIGN_URI = re.compile(r"file://[^\s'\"]*?/mlruns")
-
-
-def rehome_metadata(tracking_dir: Path = TRACKING_DIR) -> int:
-    """Point every ``file://`` URI in the store at ``tracking_dir``.
-
-    Args:
-        tracking_dir: the local ``mlruns`` directory.
-
-    Returns:
-        Number of metadata files rewritten.
-    """
-    local_uri = tracking_dir.as_uri()
-    rewritten = 0
-    for meta in tracking_dir.rglob("meta.yaml"):
-        original = meta.read_text(encoding="utf-8")
-        updated = _FOREIGN_URI.sub(local_uri, original)
-        if updated != original:
-            meta.write_text(updated, encoding="utf-8")
-            rewritten += 1
-    return rewritten
+from challenge.train import TRACKING_DIR, rehome_tracking_store
 
 
 def main() -> int:
@@ -56,7 +32,7 @@ def main() -> int:
         print(f"No MLflow store at {TRACKING_DIR}. Run `make train` first.", file=sys.stderr)
         return 1
 
-    rewritten = rehome_metadata()
+    rewritten = rehome_tracking_store()
     print(f"Rehomed {rewritten} metadata file(s) to {TRACKING_DIR}")
     print(f"MLflow UI -> http://127.0.0.1:{arguments.port}")
 

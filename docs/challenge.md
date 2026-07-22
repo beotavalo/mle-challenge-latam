@@ -43,6 +43,14 @@ make serve           # run the API locally on :8000
 | 7 | `requirements-test.txt` | `locust~=1.6` pulls `flask 1.1.2`, which does `from jinja2 import escape` — removed in Jinja2 3.1. `make stress-test` died at startup on any environment installed today. | `locust~=2.32`. The provided stress script needs no change. |
 | 8 | `requirements.txt` | `anyio` 4.x ships a pytest plugin that imports `_pytest.scope` (pytest ≥ 7) and crashed collection under the pinned pytest 6.2.5. | Pinned `anyio~=3.7.1`, inside the range starlette accepts. |
 | 9 | Repository | `__MACOSX/` and four `.DS_Store` files were committed from the challenge zip. | Removed and ignored. |
+| 10 | `mlruns/` (self-inflicted, MLE-003) | MLflow's file store writes **absolute** `file://` URIs into its metadata, so the versioned snapshot pointed at the machine that produced it. Training into it from anywhere else made MLflow resolve a foreign path and try to create `/C:` on the Linux runner. | `challenge/train.py` rehomes the store to the current checkout before training; `scripts/mlflow_ui.py` reuses that function instead of keeping its own copy. |
+| 11 | CI toolchain | `pip-audit` resolves the declared requirement ranges inside a throwaway virtualenv, which needs a working `ensurepip`. uv's standalone Linux interpreter ships without the bundled pip wheel, so `make security` died before auditing anything. | The security job bases its environment on a stock CPython; every other job keeps uv's. Auditing the *declared* set rather than the installed one keeps the accept list meaningful and transitive coverage intact. |
+| 12 | `cd.yml` | The release step passed no `--service-account`, so a first deploy on a clean project would run the service as the default compute account (`roles/editor`) — the opposite of the documented roleless runtime identity. | Pinned `--service-account` to the bootstrap's runtime account, so least privilege holds from the first revision. |
+
+Defects 10, 11 and 12 surfaced only when the pipeline first ran off the machine that
+wrote it — the first real CI execution and the first clean-project deploy. All three are
+recorded here rather than quietly fixed: a gate or a release that only behaves on its
+author's setup is not doing its job, and that failure mode is worth naming.
 
 ### 2.2 Which model, and why
 
@@ -153,6 +161,12 @@ a deployer service account limited to `run.admin` + `artifactregistry.writer`, a
 account with **no roles at all** (the API calls no GCP API), and a Workload Identity Federation
 provider whose attribute condition pins the principal to this repository. It prints the exact
 repository variables and secrets to configure. No key material is ever created or downloaded.
+
+`cd.yml` releases the revision with `--service-account` pinned to that roleless runtime account
+(`GCP_RUNTIME_SERVICE_ACCOUNT`). This is load-bearing on a clean project: `gcloud run deploy`
+preserves an existing service's identity, but a *first* deploy with no `--service-account` falls back
+to the default compute account, which carries `roles/editor`. Pinning it makes least privilege hold
+from the very first revision, not only after someone sets it by hand (defect 12).
 
 Revision envelope: 1 vCPU, 512 MiB, concurrency 80, max 10 instances, 30 s request timeout, listening
 on the injected `$PORT`. Images are tagged with the commit sha, so every revision is traceable back to

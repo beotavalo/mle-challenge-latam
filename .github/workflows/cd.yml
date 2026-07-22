@@ -25,6 +25,10 @@ env:
   SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'flight-delay-api' }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'flight-delay' }}
+  # The service runs as a dedicated identity with no project roles, because the API
+  # calls no GCP API. Pinning it explicitly keeps a clean project from silently
+  # falling back to the default compute account, which carries roles/editor.
+  RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT || format('flight-delay-runtime@{0}.iam.gserviceaccount.com', vars.GCP_PROJECT_ID) }}
 
 jobs:
   deploy:
@@ -71,6 +75,7 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           flags: >-
+            --service-account=${{ env.RUNTIME_SERVICE_ACCOUNT }}
             --allow-unauthenticated
             --port=8080
             --cpu=1

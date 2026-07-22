@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -65,6 +66,10 @@ RANDOM_STATE: Final[int] = 42
 #: missed delay is higher than the cost of a false alarm, so the delayed class
 #: drives the decision.
 SELECTION_METRIC: Final[str] = "delayed_recall"
+
+#: Any absolute file URI that ends in the tracking directory, whatever machine and
+#: path separator produced it.
+_FOREIGN_URI: Final[re.Pattern[str]] = re.compile(r"file://[^\s'\"]*?/mlruns")
 
 
 @dataclass(frozen=True)
@@ -257,6 +262,35 @@ def _register_champion(
     return str(version.version)
 
 
+def rehome_tracking_store(tracking_dir: Path = TRACKING_DIR) -> int:
+    """Point every ``file://`` URI in the versioned store at ``tracking_dir``.
+
+    MLflow's file store writes *absolute* ``file://`` URIs into its metadata, so the
+    ``mlruns/`` snapshot committed with this repository still points at the machine
+    that produced it. Training into that snapshot from anywhere else makes MLflow
+    resolve a foreign path, which on a Linux runner means trying to create ``/C:``.
+    Rewriting the URIs first makes the pipeline reproducible on any checkout.
+
+    Args:
+        tracking_dir: the local ``mlruns`` directory.
+
+    Returns:
+        Number of metadata files rewritten.
+    """
+    if not tracking_dir.exists():
+        return 0
+
+    local_uri = tracking_dir.as_uri()
+    rewritten = 0
+    for meta in tracking_dir.rglob("meta.yaml"):
+        original = meta.read_text(encoding="utf-8")
+        updated = _FOREIGN_URI.sub(local_uri, original)
+        if updated != original:
+            meta.write_text(updated, encoding="utf-8")
+            rewritten += 1
+    return rewritten
+
+
 def train(data_path: Path = DATA_PATH, tracking_dir: Path = TRACKING_DIR) -> Evaluation:
     """Run the full training pipeline and promote the best candidate.
 
@@ -267,6 +301,7 @@ def train(data_path: Path = DATA_PATH, tracking_dir: Path = TRACKING_DIR) -> Eva
     Returns:
         The evaluation of the promoted champion.
     """
+    rehome_tracking_store(tracking_dir)
     mlflow.set_tracking_uri(tracking_dir.as_uri())
     mlflow.set_experiment(EXPERIMENT_NAME)
 
