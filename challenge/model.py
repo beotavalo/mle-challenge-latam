@@ -152,6 +152,27 @@ def get_min_diff(data: Mapping[str, str]) -> float:
     return (operated_at - scheduled_at).total_seconds() / 60
 
 
+def balancing_weights(labels: pd.Series) -> Dict[int, float]:
+    """Class weights that compensate the ~4.4:1 imbalance of the dataset.
+
+    Reproduces the notebook's balancing (section 6.b.iii): the weight of each class
+    is the frequency of the *opposite* class, which is what lifts the recall of the
+    delayed flights the airport team actually cares about.
+
+    Args:
+        labels: binary target series.
+
+    Returns:
+        Mapping from class label to its weight, neutral when a class is absent.
+    """
+    total = len(labels)
+    negatives = int((labels == 0).sum())
+    positives = int((labels == 1).sum())
+    if positives == 0 or negatives == 0:
+        return {0: 1.0, 1: 1.0}
+    return {1: negatives / total, 0: positives / total}
+
+
 def _require_columns(data: pd.DataFrame, columns: Tuple[str, ...]) -> None:
     """Raise a descriptive ``ValueError`` when mandatory columns are absent."""
     missing = [column for column in columns if column not in data.columns]
@@ -194,7 +215,7 @@ class DelayModel:
             target (pd.DataFrame): target.
         """
         labels = self._as_labels(target)
-        model = LogisticRegression(class_weight=self._balancing_weights(labels))
+        model = LogisticRegression(class_weight=balancing_weights(labels))
         model.fit(features[TOP_10_FEATURES], labels)
         self._model = model
         LOGGER.info(
@@ -214,6 +235,15 @@ class DelayModel:
         model = self._ensure_fitted()
         predictions = model.predict(features[TOP_10_FEATURES])
         return [int(prediction) for prediction in predictions]
+
+    @property
+    def estimator(self) -> LogisticRegression:
+        """The fitted scikit-learn estimator, restoring the artifact when needed.
+
+        Exposed so the training pipeline can log and register exactly the object
+        that serves traffic, without reaching into the private attribute.
+        """
+        return self._ensure_fitted()
 
     def save(self, path: Path = MODEL_ARTIFACT_PATH) -> Path:
         """Persist the fitted estimator so it can be served without retraining."""
@@ -271,21 +301,6 @@ class DelayModel:
                 raise ValueError(f"Expected a single target column, got {list(target.columns)}")
             return target.iloc[:, 0]
         return target
-
-    @staticmethod
-    def _balancing_weights(labels: pd.Series) -> Dict[int, float]:
-        """Class weights that compensate the ~4.4:1 imbalance of the dataset.
-
-        Reproduces the notebook's balancing (section 6.b.iii): the weight of each
-        class is the frequency of the *opposite* class, which is what lifts the
-        recall of the delayed flights the airport team cares about.
-        """
-        total = len(labels)
-        negatives = int((labels == 0).sum())
-        positives = int((labels == 1).sum())
-        if positives == 0 or negatives == 0:
-            return {0: 1.0, 1: 1.0}
-        return {1: negatives / total, 0: positives / total}
 
     def _ensure_fitted(self) -> LogisticRegression:
         """Return the estimator, lazily restoring the champion artifact if needed."""

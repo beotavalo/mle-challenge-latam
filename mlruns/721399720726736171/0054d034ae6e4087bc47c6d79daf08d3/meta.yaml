@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/dev/mle-challenge-latam/mlruns/721399720726736171/0054d034ae6e4087bc47c6d79daf08d3/artifacts
+end_time: 1784739911771
+entry_point_name: ''
+experiment_id: '721399720726736171'
+lifecycle_stage: active
+run_id: 0054d034ae6e4087bc47c6d79daf08d3
+run_name: logreg_top10_unbalanced
+run_uuid: 0054d034ae6e4087bc47c6d79daf08d3
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1784739911489
+status: 3
+tags: []
+user_id: lissy
