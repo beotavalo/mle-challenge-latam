@@ -8,7 +8,16 @@
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = [".venv", "challenge/exploration.ipynb", "mlruns"]
+extend-exclude = [
+    ".venv",
+    "mlruns",
+    # Artifacts delivered by the challenge and kept byte-faithful on purpose, so the
+    # reviewer's diff shows only the documented fixes instead of formatting churn.
+    "challenge/exploration.ipynb",
+    "tests/model/test_model.py",
+    "tests/api/test_api.py",
+    "tests/stress/api_stress.py",
+]
 
 [tool.ruff.lint]
 select = [
@@ -29,7 +38,7 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # The DelayModel signatures are provided by the challenge and must not change;
 # keep the original `typing.Union`/`Tuple` style instead of PEP 604 unions.
-"challenge/model.py" = ["UP006", "UP007", "UP035"]
+"challenge/model.py" = ["UP006", "UP007", "UP035", "UP045"]
 # Tests legitimately use bare asserts and hardcoded sample values.
 "tests/**" = ["S101"]
 
